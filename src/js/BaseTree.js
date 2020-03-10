@@ -1039,6 +1039,10 @@ class BaseTree extends EventEmitter {
             });
         this.getSvg().call(this.getZoomListener());
 
+        // Disable double click to zoom,
+        // such events are reserved for node's URL action
+        this.getSvg().on("dblclick.zoom", null);
+
         if (this.getAllowPan() === false) {
             this.getSvg()
                 .on("mousedown.zoom", null)
@@ -1194,6 +1198,24 @@ class BaseTree extends EventEmitter {
         return this;
     }
 
+    _onNodePendingClick(nodeDataItem, index, arr) {
+        if (this._clickCount === null || typeof this._clickCount === 'undefined') {
+            this._clickCount = 0;
+        }
+        if (++this._clickCount >= 2) {
+            this._clickCount = 0;
+            if (this._pendingTimeoutId) {
+                clearTimeout(this._pendingTimeoutId);
+            }
+            this._onNodeDblClick(nodeDataItem, index, arr);
+        } else {
+            this._pendingTimeoutId = setTimeout(() => {
+                this._clickCount = 0;
+                this._onNodeClick(nodeDataItem, index, arr);
+            }, 200);
+        }
+    }
+
     /**
      * Triggers the nodeClick event when a
      * D3 node is clicked on, and proceeds
@@ -1232,6 +1254,14 @@ class BaseTree extends EventEmitter {
         else
             this.nodeToggle.call(this, nodeDataItem);
         return true;
+    }
+
+    _onNodeDblClick(nodeDataItem, index, arr) {
+        if (nodeDataItem.data.url) {
+            window.open(nodeDataItem.data.url);
+        } else {
+            console.warn("The clicked node does not contain URL property.");
+        }
     }
 
     /**
@@ -1439,7 +1469,7 @@ class BaseTree extends EventEmitter {
      */
     _updateNodes(nodeDataItem, nodes) {
         // Normalize for fixed-depth.
-        
+
         // You can increase the depth multiplication to get more depth,
         // i.e. increasing the distance between the parent node and child node
         nodes.forEach((data) => data.y = data.depth * this.getNodeDepthMultiplier());
@@ -1463,7 +1493,7 @@ class BaseTree extends EventEmitter {
                 else
                     return "translate(" + nodeDataItem.y0 + "," + nodeDataItem.x0 + ")";
             })
-            .on("click", (data, index, arr) => this._onNodeClick.call(this, data, index, arr));
+            .on("click", (data, index, arr) => this._onNodePendingClick.call(this, data, index, arr))
 
         this._nodeEnter(nodeEnter, nodes);
 
